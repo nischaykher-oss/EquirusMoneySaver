@@ -1,0 +1,7 @@
+# from inside your local project folder (where package.json is)
+git init
+git add .
+git commit -m "Initial commit: EquirusHomeSaver Calculator"
+git branch -M main
+git remote add origin https://github.com/nischaykher-oss/EquirusHomeSaver.git
+git push -u origin main
