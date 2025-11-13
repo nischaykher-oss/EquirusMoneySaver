@@ -1,24 +1,27 @@
 // src/App.jsx
 import React, { useMemo, useRef, useState } from "react";
 
-/* EquirusHomeSaver / Money Saver
-   - Inputs start empty
-   - Auto-insert Indian-style commas while typing
-   - Pressing Enter/Go on the last input triggers Calculate savings
+/*
+  Final App.jsx - all requested behavior:
+  - Inputs start empty
+  - Live Indian-style comma formatting while typing for integer fields (Loan, Excess Funds)
+  - ROI and Tenure accept decimals (no commas)
+  - Pressing Enter/Go on last input triggers Calculate savings
+  - Calculate button computes results (net savings used in summary)
+  - Summary uses "Money Saver"
+  - Opportunity cost = 5.1% p.a. (note shown)
+  - Caret moves to end after formatting to keep typing smooth
 */
 
 function formatIndianNumberStringForDisplay(raw) {
-  // raw: digits and optional decimal point string (e.g. "1000000" or "12345.67")
   if (raw === "" || raw == null) return "";
-  // handle negative if any (not expected here but safe)
   const neg = raw.startsWith("-") ? "-" : "";
   const s = neg ? raw.slice(1) : raw;
   const parts = s.split(".");
-  let intPart = parts[0].replace(/^0+(?=\d)/, ""); // remove leading zeros except single 0
+  let intPart = parts[0].replace(/^0+(?=\d)/, ""); // remove leading zeros
   if (intPart === "") intPart = "0";
   const dec = parts[1] ?? "";
 
-  // Indian grouping on intPart
   if (intPart.length <= 3) {
     return neg + intPart + (dec ? "." + dec : "");
   }
@@ -30,7 +33,6 @@ function formatIndianNumberStringForDisplay(raw) {
 
 function unformatDisplayToRaw(display) {
   if (display === "" || display == null) return "";
-  // remove commas and spaces
   return String(display).replace(/[,\s]/g, "");
 }
 
@@ -40,99 +42,83 @@ function unformatNumberStringToNumber(s) {
   return cleaned === "" ? NaN : Number(cleaned);
 }
 
-/* NumberInput: controlled input that:
-   - accepts digits, optional decimal point, optional leading minus
-   - formats with Indian commas while typing
-   - keeps caret reasonably positioned
+/* Controlled NumberInput:
    - props:
-     - value (formatted string displayed)
-     - onRawChange(rawString) -> raw string (no commas)
+     - value (display string)
+     - onRawChange(formattedOrRawString) -> store display string in parent
      - placeholder
-     - inputMode: "numeric" or "decimal"
+     - inputMode: "numeric" | "decimal"
      - onEnter() optional
-     - name (for identifying last input)
+     - name (for debugging)
 */
 function NumberInput({ value, onRawChange, placeholder, inputMode = "numeric", onEnter, name }) {
   const ref = useRef(null);
-function handleChange(e) {
-  const displayValue = e.target.value;
 
-  let cleaned = displayValue.replace(/[^0-9\.\-]/g, "");
+  function handleChange(e) {
+    const displayValue = e.target.value;
+    // allow only digits, dot, minus while typing (remove commas/spaces automatically)
+    let cleaned = displayValue.replace(/[^0-9\.\-]/g, "");
 
-  let raw;
-
-  if (inputMode === "decimal") {
-    // allow at most one decimal point
-    const parts = cleaned.split(".");
-    if (parts.length > 2) {
-      cleaned = parts.shift() + "." + parts.join("");
+    let raw;
+    if (inputMode === "decimal") {
+      // allow at most one decimal point
+      const parts = cleaned.split(".");
+      if (parts.length > 2) {
+        cleaned = parts.shift() + "." + parts.join("");
+      }
+      raw = cleaned; // decimals: keep raw (no comma-formatting)
+    } else {
+      // numeric mode: remove dots, then format with Indian grouping
+      cleaned = cleaned.replace(/\./g, "");
+      raw = cleaned;
     }
-    raw = cleaned;
-  } else {
-    // numeric mode: remove dots entirely
-    cleaned = cleaned.replace(/\./g, "");
-    raw = cleaned;
-  }
 
-  const formatted =
-    inputMode === "decimal"
-      ? raw // no commas for decimal fields
-      : formatIndianNumberStringForDisplay(raw);
+    // formatted display value: decimals keep raw, numeric get commas while typing
+    const formatted = inputMode === "decimal" ? raw : formatIndianNumberStringForDisplay(raw);
+    onRawChange(formatted);
 
-  onRawChange(formatted);
-
-  setTimeout(() => {
-    if (ref.current) {
-      const len = ref.current.value.length;
-      ref.current.setSelectionRange(len, len);
-    }
-  }, 0);
-}
-
-    // format for display and update parent with raw (no commas)
-    const formatted = formatIndianNumberStringForDisplay(raw);
-    // set display by calling parent with formatted string (parent should store formatted)
-    onRawChange(raw === "" ? "" : formatted);
-    // caret: place at end (simpler and less error-prone cross-browser)
-    // set cursor at end after state update (use setTimeout)
+    // move caret to end for a stable experience
     setTimeout(() => {
       if (ref.current) {
         const len = ref.current.value.length;
-        ref.current.setSelectionRange(len, len);
+        try {
+          ref.current.setSelectionRange(len, len);
+        } catch (err) {
+          /* ignore if unsupported */
+        }
       }
     }, 0);
   }
 
   function handleFocus(e) {
-    // show raw digits on focus (remove commas) for easier editing
+    // show raw digits (remove commas) on focus to ease editing
     const raw = unformatDisplayToRaw(value);
     onRawChange(raw);
     setTimeout(() => {
       if (ref.current) {
-        // move caret to end
         const len = ref.current.value.length;
-        ref.current.setSelectionRange(len, len);
+        try {
+          ref.current.setSelectionRange(len, len);
+        } catch (err) {}
       }
     }, 0);
   }
 
- function handleBlur(e) {
-  const raw = unformatDisplayToRaw(e.target.value);
-
-  if (raw === "") {
-    onRawChange("");
-    return;
+  function handleBlur(e) {
+    const raw = unformatDisplayToRaw(e.target.value);
+    if (raw === "") {
+      onRawChange("");
+      return;
+    }
+    if (inputMode === "decimal") {
+      // keep decimals as-is (no commas)
+      onRawChange(raw);
+    } else {
+      // integer fields: format with Indian grouping on blur
+      const formatted = formatIndianNumberStringForDisplay(raw);
+      onRawChange(formatted);
+    }
   }
-
-  if (inputMode === "decimal") {
-    // ROI & Tenure keep decimals; no comma formatting
-    onRawChange(raw);
-  } else {
-    // Loan & Offset get Indian commas
-    const formatted = formatIndianNumberStringForDisplay(raw);
-    onRawChange(formatted);
-  }
-}
 
   function handleKeyDown(e) {
     if (e.key === "Enter" || e.key === "Go") {
@@ -146,6 +132,7 @@ function handleChange(e) {
   return (
     <input
       ref={ref}
+      name={name}
       inputMode={inputMode === "decimal" ? "decimal" : "numeric"}
       value={value ?? ""}
       onChange={handleChange}
@@ -154,7 +141,6 @@ function handleChange(e) {
       onKeyDown={handleKeyDown}
       placeholder={placeholder}
       className="w-full p-2 border rounded"
-      name={name}
       autoComplete="off"
     />
   );
@@ -186,12 +172,11 @@ function formatIndian(x) {
 
 export default function App() {
   // start empty
-  const [loanDisplay, setLoanDisplay] = useState("");   // formatted shown in input
+  const [loanDisplay, setLoanDisplay] = useState("");
   const [rateDisplay, setRateDisplay] = useState("");
   const [tenureDisplay, setTenureDisplay] = useState("");
   const [offsetDisplay, setOffsetDisplay] = useState("");
 
-  // results
   const [results, setResults] = useState({
     emi: NaN,
     yearsNew: NaN,
@@ -201,7 +186,6 @@ export default function App() {
     effectiveRate: NaN,
   });
 
-  // internal opportunity cost
   const SAVINGS_ROI = 5.1;
 
   // parsed numeric values
@@ -264,7 +248,7 @@ export default function App() {
   const fmt = (v) => (typeof v === "number" && isFinite(v) ? formatIndian(v) : "—");
   const fmtPct = (v) => (typeof v === "number" && isFinite(v) ? `${(+v).toFixed(2)}%` : "—");
 
-  // handler to trigger calculate when Enter on last input
+  // trigger calculate when Enter/Go is pressed on offset (last) input
   function onOffsetEnter() {
     calculateNow();
   }
@@ -305,12 +289,14 @@ export default function App() {
                 value={tenureDisplay}
                 onRawChange={setTenureDisplay}
                 placeholder="e.g. 20"
-                inputMode="numeric"
+                inputMode="decimal"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium">Average Monthly Balance Maintained / Excess Funds (₹)</label>
+              <label className="block text-sm font-medium">
+                Average Monthly Balance Maintained / Excess Funds (₹)
+              </label>
               <NumberInput
                 name="offset"
                 value={offsetDisplay}
@@ -385,5 +371,3 @@ export default function App() {
     </div>
   );
 }
-
-
