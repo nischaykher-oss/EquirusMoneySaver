@@ -186,7 +186,7 @@ export default function App() {
     effectiveRate: NaN,
   });
 
-  const SAVINGS_ROI = 5.1;
+  const SAVINGS_ROI = 5;
 
   // parsed numeric values
   const loan = useMemo(() => unformatNumberStringToNumber(unformatDisplayToRaw(loanDisplay)), [loanDisplay]);
@@ -364,7 +364,7 @@ export default function App() {
           </div>
 
           <div className="mt-4 text-sm text-gray-600">
-            This calculator assumes an opportunity cost of <strong>5.1% p.a.</strong> — an approximate average post-tax fixed-deposit return — which is used to compute the net savings shown above.
+            This calculator assumes an opportunity cost of <strong>5% p.a.</strong> — an approximate average post-tax fixed-deposit return — which is used to compute the net savings shown above.
           </div>
         </div>
       </div>
